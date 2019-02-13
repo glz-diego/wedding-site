@@ -24,19 +24,6 @@ img {
   margin-left: auto;
   margin-right: auto;
 }
-.hr{
-	position: fixed;
-	top: 20px;
-	left: 20px;
-	color: black;
-}
-nav{
-	color: black;
-	position: fixed;
-	top: 40px;
-	font-size: 14px;
-	font-family: florsn18;
-}
 .navl{
 	color: black;
 	position: fixed;
@@ -44,14 +31,15 @@ nav{
 	left: 20px;
 	font-size: 11px;
 	font-family: florsn18;
-	float: right;
+	text-decoration: none;
 }
 .navr{
-	color: black;
+	color: #102A45;
 	position: fixed;
 	top: 45px;
 	right: 20px;
 	font-size: 11px;
 	font-family: florsn18;
 	float: left;
+	text-decoration: none;
 }
