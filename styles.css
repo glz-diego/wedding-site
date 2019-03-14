@@ -19,11 +19,6 @@
 	font-family: florsn18;
 	src: url(florsn18.ttf);
 }
-img {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-}
 .navl{
 	color: black;
 	position: fixed;

@@ -1,0 +1,2099 @@
+window.slate = window.slate || {};
+window.theme = window.theme || {};
+
+/*================ Slate ================*/
+/**
+ * A11y Helpers
+ * -----------------------------------------------------------------------------
+ * A collection of useful functions that help make your theme more accessible
+ * to users with visual impairments.
+ *
+ *
+ * @namespace a11y
+ */
+
+slate.a11y = {
+
+  /**
+   * For use when focus shifts to a container rather than a link
+   * eg for In-page links, after scroll, focus shifts to content area so that
+   * next `tab` is where user expects if focusing a link, just $link.focus();
+   *
+   * @param {JQuery} $element - The element to be acted upon
+   */
+  pageLinkFocus: function($element) {
+    var focusClass = 'js-focus-hidden';
+
+    $element.first()
+      .attr('tabIndex', '-1')
+      .focus()
+      .addClass(focusClass)
+      .one('blur', callback);
+
+    function callback() {
+      $element.first()
+        .removeClass(focusClass)
+        .removeAttr('tabindex');
+    }
+  },
+
+  /**
+   * If there's a hash in the url, focus the appropriate element
+   */
+  focusHash: function() {
+    var hash = window.location.hash;
+
+    // is there a hash in the url? is it an element on the page?
+    if (hash && document.getElementById(hash.slice(1))) {
+      this.pageLinkFocus($(hash));
+    }
+  },
+
+  /**
+   * When an in-page (url w/hash) link is clicked, focus the appropriate element
+   */
+  bindInPageLinks: function() {
+    $('a[href*=#]').on('click', function(evt) {
+      this.pageLinkFocus($(evt.currentTarget.hash));
+    }.bind(this));
+  },
+
+  /**
+   * Traps the focus in a particular container
+   *
+   * @param {object} options - Options to be used
+   * @param {jQuery} options.$container - Container to trap focus within
+   * @param {jQuery} options.$elementToFocus - Element to be focused when focus leaves container
+   * @param {string} options.namespace - Namespace used for new focus event handler
+   */
+  trapFocus: function(options) {
+    var eventName = options.namespace
+      ? 'focusin.' + options.namespace
+      : 'focusin';
+
+    if (!options.$elementToFocus) {
+      options.$elementToFocus = options.$container;
+    }
+
+    options.$container.attr('tabindex', '-1');
+    options.$elementToFocus.focus();
+
+    $(document).on(eventName, function(evt) {
+      if (options.$container[0] !== evt.target && !options.$container.has(evt.target).length) {
+        options.$container.focus();
+      }
+    });
+  },
+
+  /**
+   * Removes the trap of focus in a particular container
+   *
+   * @param {object} options - Options to be used
+   * @param {jQuery} options.$container - Container to trap focus within
+   * @param {string} options.namespace - Namespace used for new focus event handler
+   */
+  removeTrapFocus: function(options) {
+    var eventName = options.namespace
+      ? 'focusin.' + options.namespace
+      : 'focusin';
+
+    if (options.$container && options.$container.length) {
+      options.$container.removeAttr('tabindex');
+    }
+
+    $(document).off(eventName);
+  }
+};
+
+/**
+ * Cart Template Script
+ * ------------------------------------------------------------------------------
+ * A file that contains scripts highly couple code to the Cart template.
+ *
+ * @namespace cart
+ */
+
+slate.cart = {
+  
+  /**
+   * Browser cookies are required to use the cart. This function checks if
+   * cookies are enabled in the browser.
+   */
+  cookiesEnabled: function() {
+    var cookieEnabled = navigator.cookieEnabled;
+
+    if (!cookieEnabled){
+      document.cookie = 'testcookie';
+      cookieEnabled = (document.cookie.indexOf('testcookie') !== -1);
+    }
+    return cookieEnabled;
+  }
+};
+
+/**
+ * Utility helpers
+ * -----------------------------------------------------------------------------
+ * A collection of useful functions for dealing with arrays and objects
+ *
+ * @namespace utils
+ */
+
+slate.utils = {
+
+  /**
+   * Return an object from an array of objects that matches the provided key and value
+   *
+   * @param {array} array - Array of objects
+   * @param {string} key - Key to match the value against
+   * @param {string} value - Value to get match of
+   */
+  findInstance: function(array, key, value) {
+    for (var i = 0; i < array.length; i++) {
+      if (array[i][key] === value) {
+        return array[i];
+      }
+    }
+  },
+
+  /**
+   * Remove an object from an array of objects by matching the provided key and value
+   *
+   * @param {array} array - Array of objects
+   * @param {string} key - Key to match the value against
+   * @param {string} value - Value to get match of
+   */
+  removeInstance: function(array, key, value) {
+    var i = array.length;
+    while(i--) {
+      if (array[i][key] === value) {
+        array.splice(i, 1);
+        break;
+      }
+    }
+
+    return array;
+  },
+
+  /**
+   * _.compact from lodash
+   * Remove empty/false items from array
+   * Source: https://github.com/lodash/lodash/blob/master/compact.js
+   *
+   * @param {array} array
+   */
+  compact: function(array) {
+    var index = -1;
+    var length = array == null ? 0 : array.length;
+    var resIndex = 0;
+    var result = [];
+
+    while (++index < length) {
+      var value = array[index];
+      if (value) {
+        result[resIndex++] = value;
+      }
+    }
+    return result;
+  },
+
+  /**
+   * _.defaultTo from lodash
+   * Checks `value` to determine whether a default value should be returned in
+   * its place. The `defaultValue` is returned if `value` is `NaN`, `null`,
+   * or `undefined`.
+   * Source: https://github.com/lodash/lodash/blob/master/defaultTo.js
+   *
+   * @param {*} value - Value to check
+   * @param {*} defaultValue - Default value
+   * @returns {*} - Returns the resolved value
+   */
+  defaultTo: function(value, defaultValue) {
+    return (value == null || value !== value) ? defaultValue : value
+  }
+};
+
+/**
+ * Rich Text Editor
+ * -----------------------------------------------------------------------------
+ * Wrap iframes and tables in div tags to force responsive/scrollable layout.
+ *
+ * @namespace rte
+ */
+
+slate.rte = {
+  /**
+   * Wrap tables in a container div to make them scrollable when needed
+   *
+   * @param {object} options - Options to be used
+   * @param {jquery} options.$tables - jquery object(s) of the table(s) to wrap
+   * @param {string} options.tableWrapperClass - table wrapper class name
+   */
+  wrapTable: function(options) {
+    var tableWrapperClass = typeof options.tableWrapperClass === "undefined" ? '' : options.tableWrapperClass;
+
+    options.$tables.wrap('<div class="' + tableWrapperClass + '"></div>');
+  },
+
+  /**
+   * Wrap iframes in a container div to make them responsive
+   *
+   * @param {object} options - Options to be used
+   * @param {jquery} options.$iframes - jquery object(s) of the iframe(s) to wrap
+   * @param {string} options.iframeWrapperClass - class name used on the wrapping div
+   */
+  wrapIframe: function(options) {
+    var iframeWrapperClass = typeof options.iframeWrapperClass === "undefined" ? '' : options.iframeWrapperClass;
+
+    options.$iframes.each(function() {
+      // Add wrapper to make video responsive
+      $(this).wrap('<div class="' + iframeWrapperClass + '"></div>');
+      
+      // Re-set the src attribute on each iframe after page load
+      // for Chrome's "incorrect iFrame content on 'back'" bug.
+      // https://code.google.com/p/chromium/issues/detail?id=395791
+      // Need to specifically target video and admin bar
+      this.src = this.src;
+    });
+  }
+};
+
+slate.Sections = function Sections() {
+  this.constructors = {};
+  this.instances = [];
+
+  $(document)
+    .on('shopify:section:load', this._onSectionLoad.bind(this))
+    .on('shopify:section:unload', this._onSectionUnload.bind(this))
+    .on('shopify:section:select', this._onSelect.bind(this))
+    .on('shopify:section:deselect', this._onDeselect.bind(this))
+    .on('shopify:section:reorder', this._onReorder.bind(this))
+    .on('shopify:block:select', this._onBlockSelect.bind(this))
+    .on('shopify:block:deselect', this._onBlockDeselect.bind(this));
+};
+
+slate.Sections.prototype = $.extend({}, slate.Sections.prototype, {
+  _createInstance: function(container, constructor) {
+    var $container = $(container);
+    var id = $container.attr('data-section-id');
+    var type = $container.attr('data-section-type');
+
+    constructor = constructor || this.constructors[type];
+
+    if (typeof constructor === 'undefined') {
+      return;
+    }
+
+    var instance = $.extend(new constructor(container), {
+      id: id,
+      type: type,
+      container: container
+    });
+
+    this.instances.push(instance);
+  },
+
+  _onSectionLoad: function(evt) {
+    var container = $('[data-section-id]', evt.target)[0];
+    if (container) {
+      this._createInstance(container);
+    }
+  },
+
+  _onSectionUnload: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (!instance) {
+      return;
+    }
+
+    if (typeof instance.onUnload === 'function') {
+      instance.onUnload(evt);
+    }
+
+    this.instances = slate.utils.removeInstance(this.instances, 'id', evt.detail.sectionId);
+  },
+
+  _onSelect: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (instance && typeof instance.onSelect === 'function') {
+      instance.onSelect(evt);
+    }
+  },
+
+  _onDeselect: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (instance && typeof instance.onDeselect === 'function') {
+      instance.onDeselect(evt);
+    }
+  },
+
+  _onReorder: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (instance && typeof instance.onReorder === 'function') {
+      instance.onReorder(evt);
+    }
+  },
+
+  _onBlockSelect: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (instance && typeof instance.onBlockSelect === 'function') {
+      instance.onBlockSelect(evt);
+    }
+  },
+
+  _onBlockDeselect: function(evt) {
+    var instance = slate.utils.findInstance(this.instances, 'id', evt.detail.sectionId);
+
+    if (instance && typeof instance.onBlockDeselect === 'function') {
+      instance.onBlockDeselect(evt);
+    }
+  },
+
+  register: function(type, constructor) {
+    this.constructors[type] = constructor;
+
+    $('[data-section-type=' + type + ']').each(function(index, container) {
+      this._createInstance(container, constructor);
+    }.bind(this));
+  }
+});
+
+/**
+ * Currency Helpers
+ * -----------------------------------------------------------------------------
+ * A collection of useful functions that help with currency formatting
+ *
+ * Current contents
+ * - formatMoney - Takes an amount in cents and returns it as a formatted dollar value.
+ *
+ */
+
+slate.Currency = (function() {
+  var moneyFormat = '${{amount}}';
+
+  /**
+   * Format money values based on your shop currency settings
+   * @param  {Number|string} cents - value in cents or dollar amount e.g. 300 cents
+   * or 3.00 dollars
+   * @param  {String} format - shop money_format setting
+   * @return {String} value - formatted value
+   */
+  function formatMoney(cents, format) {
+    if (typeof cents === 'string') {
+      cents = cents.replace('.', '');
+    }
+    var value = '';
+    var placeholderRegex = /\{\{\s*(\w+)\s*\}\}/;
+    var formatString = (format || moneyFormat);
+
+    function formatWithDelimiters(number, precision, thousands, decimal) {
+      precision = slate.utils.defaultTo(precision, 2);
+      thousands = slate.utils.defaultTo(thousands, ',');
+      decimal = slate.utils.defaultTo(decimal, '.');
+
+      if (isNaN(number) || number == null) {
+        return 0;
+      }
+
+      number = (number / 100.0).toFixed(precision);
+
+      var parts = number.split('.');
+      var dollarsAmount = parts[0].replace(/(\d)(?=(\d\d\d)+(?!\d))/g, '$1' + thousands);
+      var centsAmount = parts[1] ? (decimal + parts[1]) : '';
+
+      return dollarsAmount + centsAmount;
+    }
+
+    switch (formatString.match(placeholderRegex)[1]) {
+      case 'amount':
+        value = formatWithDelimiters(cents, 2);
+        break;
+      case 'amount_no_decimals':
+        value = formatWithDelimiters(cents, 0);
+        break;
+      case 'amount_with_space_separator':
+        value = formatWithDelimiters(cents, 2, ' ', '.');
+        break;
+      case 'amount_no_decimals_with_comma_separator':
+        value = formatWithDelimiters(cents, 0, ',', '.');
+        break;
+      case 'amount_no_decimals_with_space_separator':
+        value = formatWithDelimiters(cents, 0, ' ');
+        break;
+    }
+
+    return formatString.replace(placeholderRegex, value);
+  }
+
+  return {
+    formatMoney: formatMoney
+  };
+})();
+
+/**
+ * Image Helper Functions
+ * -----------------------------------------------------------------------------
+ * A collection of functions that help with basic image operations.
+ *
+ */
+
+slate.Image = (function() {
+
+  /**
+   * Preloads an image in memory and uses the browsers cache to store it until needed.
+   *
+   * @param {Array} images - A list of image urls
+   * @param {String} size - A shopify image size attribute
+   */
+
+  function preload(images, size) {
+    if (typeof images === 'string') {
+      images = [images];
+    }
+
+    for (var i = 0; i < images.length; i++) {
+      var image = images[i];
+      this.loadImage(this.getSizedImageUrl(image, size));
+    }
+  }
+
+  /**
+   * Loads and caches an image in the browsers cache.
+   * @param {string} path - An image url
+   */
+  function loadImage(path) {
+    new Image().src = path;
+  }
+
+  /**
+   * Find the Shopify image attribute size
+   *
+   * @param {string} src
+   * @returns {null}
+   */
+  function imageSize(src) {
+    var match = src.match(/.+_((?:pico|icon|thumb|small|compact|medium|large|grande)|\d{1,4}x\d{0,4}|x\d{1,4})[_\.@]/);
+
+    if (match) {
+      return match[1];
+    } else {
+      return null;
+    }
+  }
+
+  /**
+   * Adds a Shopify size attribute to a URL
+   *
+   * @param src
+   * @param size
+   * @returns {*}
+   */
+  function getSizedImageUrl(src, size) {
+    if (size === null) {
+      return src;
+    }
+
+    if (size === 'master') {
+      return this.removeProtocol(src);
+    }
+
+    var match = src.match(/\.(jpg|jpeg|gif|png|bmp|bitmap|tiff|tif)(\?v=\d+)?$/i);
+
+    if (match) {
+      var prefix = src.split(match[0]);
+      var suffix = match[0];
+
+      return this.removeProtocol(prefix[0] + '_' + size + suffix);
+    } else {
+      return null;
+    }
+  }
+
+  function removeProtocol(path) {
+    return path.replace(/http(s)?:/, '');
+  }
+
+  return {
+    preload: preload,
+    loadImage: loadImage,
+    imageSize: imageSize,
+    getSizedImageUrl: getSizedImageUrl,
+    removeProtocol: removeProtocol
+  };
+})();
+
+/**
+ * Variant Selection scripts
+ * ------------------------------------------------------------------------------
+ *
+ * Handles change events from the variant inputs in any `cart/add` forms that may
+ * exist. Also updates the master select and triggers updates when the variants
+ * price or image changes.
+ *
+ * @namespace variants
+ */
+
+slate.Variants = (function() {
+
+  /**
+   * Variant constructor
+   *
+   * @param {object} options - Settings from `product.js`
+   */
+  function Variants(options) {
+    this.$container = options.$container;
+    this.product = options.product;
+    this.singleOptionSelector = options.singleOptionSelector;
+    this.originalSelectorId = options.originalSelectorId;
+    this.enableHistoryState = options.enableHistoryState;
+    this.currentVariant = this._getVariantFromOptions();
+
+    $(this.singleOptionSelector, this.$container).on('change', this._onSelectChange.bind(this));
+  }
+
+  Variants.prototype = $.extend({}, Variants.prototype, {
+
+    /**
+     * Get the currently selected options from add-to-cart form. Works with all
+     * form input elements.
+     *
+     * @return {array} options - Values of currently selected variants
+     */
+    _getCurrentOptions: function() {
+      var currentOptions = $.map($(this.singleOptionSelector, this.$container), function(element) {
+        var $element = $(element);
+        var type = $element.attr('type');
+        var currentOption = {};
+
+        if (type === 'radio' || type === 'checkbox') {
+          if ($element[0].checked) {
+            currentOption.value = $element.val();
+            currentOption.index = $element.data('index');
+
+            return currentOption;
+          } else {
+            return false;
+          }
+        } else {
+          currentOption.value = $element.val();
+          currentOption.index = $element.data('index');
+
+          return currentOption;
+        }
+      });
+
+      // remove any unchecked input values if using radio buttons or checkboxes
+      currentOptions = slate.utils.compact(currentOptions);
+
+      return currentOptions;
+    },
+
+    /**
+     * Find variant based on selected values.
+     *
+     * @param  {array} selectedValues - Values of variant inputs
+     * @return {object || undefined} found - Variant object from product.variants
+     */
+    _getVariantFromOptions: function() {
+      var selectedValues = this._getCurrentOptions();
+      var variants = this.product.variants;
+      var found = false;
+
+      variants.forEach(function(variant) {
+        var satisfied = true;
+
+        selectedValues.forEach(function(option) {
+          if (satisfied) {
+            satisfied = (option.value === variant[option.index]);
+          }
+        });
+
+        if (satisfied) {
+          found = variant;
+        }
+      });
+
+      return found || null;
+    },
+
+    /**
+     * Event handler for when a variant input changes.
+     */
+    _onSelectChange: function() {
+      var variant = this._getVariantFromOptions();
+
+      this.$container.trigger({
+        type: 'variantChange',
+        variant: variant
+      });
+
+      if (!variant) {
+        return;
+      }
+
+      this._updateMasterSelect(variant);
+      this._updateImages(variant);
+      this._updatePrice(variant);
+      this.currentVariant = variant;
+
+      if (this.enableHistoryState) {
+        this._updateHistoryState(variant);
+      }
+    },
+
+    /**
+     * Trigger event when variant image changes
+     *
+     * @param  {object} variant - Currently selected variant
+     * @return {event}  variantImageChange
+     */
+    _updateImages: function(variant) {
+      var variantImage = variant.featured_image || {};
+      var currentVariantImage = this.currentVariant.featured_image || {};
+
+      if (!variant.featured_image || variantImage.src === currentVariantImage.src) {
+        return;
+      }
+
+      this.$container.trigger({
+        type: 'variantImageChange',
+        variant: variant
+      });
+    },
+
+    /**
+     * Trigger event when variant price changes.
+     *
+     * @param  {object} variant - Currently selected variant
+     * @return {event} variantPriceChange
+     */
+    _updatePrice: function(variant) {
+      if (variant.price === this.currentVariant.price && variant.compare_at_price === this.currentVariant.compare_at_price) {
+        return;
+      }
+
+      this.$container.trigger({
+        type: 'variantPriceChange',
+        variant: variant
+      });
+    },
+
+    /**
+     * Update history state for product deeplinking
+     *
+     * @param {object} variant - Currently selected variant
+     */
+    _updateHistoryState: function(variant) {
+      if (!history.replaceState || !variant) {
+        return;
+      }
+
+      var newurl = window.location.protocol + '//' + window.location.host + window.location.pathname + '?variant=' + variant.id;
+      window.history.replaceState({path: newurl}, '', newurl);
+    },
+
+    /**
+     * Update hidden master select of variant change
+     *
+     * @param {object} variant - Currently selected variant
+     */
+    _updateMasterSelect: function(variant) {
+      $(this.originalSelectorId, this.$container)[0].value = variant.id;
+    }
+  });
+
+  return Variants;
+})();
+
+
+/*================ Sections ================*/
+theme.SignIn = (function () {
+
+  /**
+   * Product section constructor. Runs on page load as well as Theme Editor
+   * `section:load` events.
+   * @param {string} container - selector for the section container DOM element
+   */
+  function SignIn(container) {
+    window.signin = this
+    this.$container = $(container)
+    var body = $('body')
+    var signin = this.$container.find('#signin')
+    var overlay = this.$container.find('.signin-overlay')
+    var drawer = this.$container.find('.signin-drawer')
+
+    this.handleOpenDrawer = function() {
+      body.addClass('signin-open')
+    }
+
+    this.handleCloseDrawer = function() {
+      body.removeClass('signin-open')
+    }
+
+    overlay.on('click', this.handleCloseDrawer)
+    $(document).on('keyup', function (ev) {
+      if (ev.keyCode === 27 && body.hasClass('signin-open')) {
+        overlay.click()
+      }
+    })
+
+    console.log("SignIn instantiated")
+  }
+
+  SignIn.prototype = $.extend({}, SignIn.prototype, {
+    /**
+     * Event callback for Theme Editor `section:unload` event
+     */
+    onUnload: function () {
+      this.$container.off(this.namespace);
+    }
+  });
+
+  return SignIn;
+})();
+theme.Cart = (function () {
+
+  /**
+   * Product section constructor. Runs on page load as well as Theme Editor
+   * `section:load` events.
+   * @param {string} container - selector for the section container DOM element
+   */
+  function Cart(container) {
+    var self = window.cart = this
+    this.$container = $(container)
+    var body = $('body')
+    var cart = this.$container.find('#cart')
+    var overlay = this.$container.find('.cart-overlay')
+    var drawer = this.$container.find('.cart-drawer')
+    var itemsContainer = cart.find('.cart-items')
+    var header = cart.find('header')
+    var footer = cart.find('footer')
+
+    cart.on('click', '.cart-items .remove', function(ev) {
+      var item = $(this).closest('.cart-item')
+      var idx = item.data('index')
+
+      CartJS.removeItem(idx + 1, {
+        success: function() {
+          CartJS.cart.items.splice(idx, 1)
+          renderCart()
+        }
+      })
+    })
+
+    this.handleOpenDrawer = function() {
+      body.addClass('cart-open')
+      renderCart()
+    }
+
+    this.handleCloseDrawer = function() {
+      body.removeClass('cart-open')
+    }
+
+    overlay.on('click', this.handleCloseDrawer)
+    $(document).on('keyup', function (ev) {
+      if (ev.keyCode === 27 && body.hasClass('cart-open')) {
+        overlay.click()
+      }
+    })
+
+    function renderCart() {
+      var items = CartJS.cart.items
+      
+      itemsContainer.empty()
+
+      // Update header count
+      var count = header.find('.count')
+      if (items.length) {
+        count.show().text(items.length)
+      } else {
+        count.hide()
+        itemsContainer.append('<div class="cart-empty">Your cart is empty.</div>')
+      }
+
+      var totalPrice = 0
+
+      CartJS.cart.items.forEach(function(item, idx) {
+        var template = $($('.template-cart-item').html()).clone()
+        itemsContainer.append(template)
+
+        const imageUrl = slate.Image.getSizedImageUrl(item.image, '512x512')
+
+        template.find('.image-container').attr('style', 'background-image: url(' + imageUrl + ')')
+
+        template.find('.title').text(item.title)
+        template.find('.description').text(item.description)
+        template.find('.price').text(slate.Currency.formatMoney(item.price, theme.moneyFormat))
+        template.find('.size').text(item.properties.size)
+        template.attr('data-index', idx)
+
+        totalPrice += item.discounted_price
+      })
+
+      // Update price in cart footer
+      footer.find('.subtotal .price').text(slate.Currency.formatMoney(totalPrice, theme.moneyFormat))
+      footer.find('.checkout-button input').attr('value', 'Checkout | ' + slate.Currency.formatMoney(totalPrice, theme.moneyFormat))
+    }
+  }
+
+  Cart.prototype = $.extend({}, Cart.prototype, {
+    /**
+     * Event callback for Theme Editor `section:unload` event
+     */
+    onUnload: function () {
+      this.$container.off(this.namespace);
+    }
+  });
+
+  return Cart;
+})();
+/**
+ * Product Template Script
+ * ------------------------------------------------------------------------------
+ * A file that contains scripts highly couple code to the Product template.
+ *
+   * @namespace product
+ */
+
+const ProductTypes = {
+  EngagementRing: 'Engagement Ring',
+  WeddingBand: 'Wedding Band'
+}
+
+var ProductLabels = {
+  'Engagement Ring': {
+    setting: {
+      'signature': 'Signature',
+      'tapered': 'Tapered',
+      'thin': 'Thin'
+    },
+    size: {
+      '1ct': '1 Carat',
+      '1-5ct': '1.5 Carat',
+      '2ct': '2 Carat'
+    },
+    metal: {
+      'white-gold': 'White Gold',
+      'rose-gold': 'Rose Gold',
+      'yellow-gold': 'Yellow Gold',
+      'platinum': 'Platinum' 
+    }
+  },
+
+  'Wedding Band': {
+    gender: {
+      'mens': "Men's",
+      'womens': "Women's"
+    },
+    style: {
+      'flat': 'Flat',
+      'round': 'Round',
+      'knife-edge': 'Knife Edge',
+      'half-pave': 'Half Pavé',
+      'eternity-pave': 'Eternity Pavé',
+      'half-eternity': 'Half Eternity',
+      'eternity': 'Eternity',
+      'tapered-pave': 'Tapered Pavé',
+      'tapered': 'Tapered'
+    },
+    width: {
+      '1-5mm': '1.5mm',
+      '2mm': '2mm',
+      '2-2mm': '2.2mm',
+      '2-5mm': '2.5mm',
+      '3mm': '3mm',
+      '4-5mm': '4.5mm',
+      '6mm': '6mm'
+    },
+    metal: {
+      'white-gold': 'White Gold',
+      'rose-gold': 'Rose Gold',
+      'yellow-gold': 'Yellow Gold',
+      'platinum': 'Platinum'
+    }
+  }
+}
+
+var ONHAND_IMAGES = {
+  classic: {
+    size: {
+      '1ct': 'inbloom-pdp-d-solitaire-carat-1-2x.jpg',
+      '1-5ct': 'inbloom-pdp-d-solitaire-carat-1_5-2x.jpg',
+      '2ct': 'inbloom-pdp-d-solitaire-carat-2-2x.jpg',
+    },
+    setting: {
+      signature: 'inbloom-pdp-d-solitaire-style-classic-2x.jpg',
+      tapered: 'inbloom-pdp-d-solitaire-style-tapered-2x.jpg',
+      thin: 'inbloom-pdp-d-solitaire-style-thin-2x.jpg',
+    },
+    metal: {
+      'white-gold': 'inbloom-pdp-d-solitaire-material-white-2x.jpg',
+      'rose-gold': 'inbloom-pdp-d-solitaire-material-rose-2x.jpg',
+      'yellow-gold': 'inbloom-pdp-d-solitaire-material-yellow-2x.jpg',
+      'platinum': 'inbloom-pdp-d-solitaire-material-platinum-2x.jpg'
+    }
+  },
+  pave: {
+    size: {
+      '1ct': 'inbloom-pdp-d-pave-carat-1-2x.jpg',
+      '1-5ct': 'inbloom-pdp-d-pave-carat-1_5-2x.jpg',
+      '2ct': 'inbloom-pdp-d-pave-carat-2-2x.jpg',
+    },
+    setting: {
+      signature: 'inbloom-pdp-d-pave-style-classic-2x.jpg',
+      tapered: 'inbloom-pdp-d-pave-style-tapered-2x.jpg',
+      thin: 'inbloom-pdp-d-pave-style-thin-2x.jpg',
+    },
+    metal: {
+      'white-gold': 'inbloom-pdp-d-pave-material-white-2x.jpg',
+      'rose-gold': 'inbloom-pdp-d-pave-material-rose-2x.jpg',
+      'yellow-gold': 'inbloom-pdp-d-pave-material-yellow-2x.jpg',
+      'platinum': 'inbloom-pdp-d-pave-material-platinum-2x.jpg'
+    }
+  },
+  halo: {
+    size: {
+      '1ct': 'inbloom-pdp-d-halo-carat-1-2x.jpg',
+      '1-5ct': 'inbloom-pdp-d-halo-carat-1_5-2x.jpg',
+      '2ct': 'inbloom-pdp-d-halo-carat-2-2x.jpg',
+    },
+    metal: {
+      'white-gold': 'inbloom-pdp-d-halo-material-white-2x.jpg',
+      'rose-gold': 'inbloom-pdp-d-halo-material-rose-2x.jpg',
+      'yellow-gold': 'inbloom-pdp-d-halo-material-yellow-2x.jpg',
+      'platinum': 'inbloom-pdp-d-halo-material-platinum-2x.jpg'
+    }
+  },
+  channel: {
+    size: {
+      '1ct': 'inbloom-pdp-d-channel-carat-1-2x.jpg',
+      '1-5ct': 'inbloom-pdp-d-channel-carat-1_5-2x.jpg',
+      '2ct': 'inbloom-pdp-d-channel-carat-2-2x.jpg',
+    },
+    metal: {
+      'white-gold': 'inbloom-pdp-d-channel-material-white-2x.jpg',
+      'rose-gold': 'inbloom-pdp-d-channel-material-rose-2x.jpg',
+      'yellow-gold': 'inbloom-pdp-d-channel-material-yellow-2x.jpg',
+      'platinum': 'inbloom-pdp-d-channel-material-platinum-2x.jpg'
+    }
+  }
+}
+
+function getLabel(type, key, value) {
+  if (ProductLabels[type] && ProductLabels[type][key] && ProductLabels[type][key][value]) {
+    return ProductLabels[type][key][value]
+  }
+}
+
+theme.Product = (function() {
+
+  var selectors = {
+    addToCart: '[data-add-to-cart]',
+    addToCartText: '[data-add-to-cart-text]',
+    comparePrice: '[data-compare-price]',
+    comparePriceText: '[data-compare-text]',
+    originalSelectorId: '[data-product-select]',
+    priceWrapper: '[data-price-wrapper]',
+    productFeaturedImage: '[data-product-featured-image]',
+    productJson: '[data-product-json]',
+    productPrice: '[data-product-price]',
+    productThumbs: '[data-product-single-thumbnail]',
+    singleOptionSelector: '[data-single-option-selector]'
+  };
+
+  /**
+   * Product section constructor. Runs on page load as well as Theme Editor
+   * `section:load` events.
+   * @param {string} container - selector for the section container DOM element
+   */
+  function Product(container) {
+    var self = this
+    this.$container = $(container);
+
+    var modal = this.$container.find('.product-configurator-modal')
+
+    // Stop parsing if we don't have the product json script tag when loading
+    // section in the Theme Editor
+    if (!$(selectors.productJson, this.$container).html()) {
+      return;
+    }
+
+    var sectionId = this.$container.attr('data-section-id');
+    this.productSingleObject = JSON.parse($(selectors.productJson, this.$container).html());
+    this.currentProduct = this.productSingleObject
+    track(this.currentProduct)
+
+    const productType = this.currentProduct.type // Engagement Ring or Wedding Band
+    var ringStyle = this.$container.data('ring-style')
+
+    // Slick carousel init
+    var slickIdx = 0, slickLength = 0
+    var carousel = this.$container.find('.carousel')
+    var selected = parseHandle(this.currentProduct.handle)
+    var ringSize = null
+    var currentPane = null
+
+    function parseHandle(handle) {
+      if (productType === ProductTypes.EngagementRing) {
+        var parts = handle.split(/-(?:\d-)?\dct-/)
+        var styleParts = parts[0].split('-')
+        var style = styleParts[0]
+        var setting = styleParts[1]
+        var metal = parts[1]
+        var size = /((?:\d-)?\dct)/.test(handle) && RegExp.$1
+
+        return {
+          type: productType,
+          style: style,
+          setting: setting,
+          metal: metal,
+          size: size
+        }
+      } else if (productType === ProductTypes.WeddingBand) {
+        var parts = handle.split(/-(?:\d-)?\dmm-/)
+        var styleParts = parts[0].split('-')
+        var gender = styleParts.shift()
+        var style = styleParts.join('-')
+        var width = /((?:\d-)?\dmm)/.test(handle) && RegExp.$1
+        var metal = parts[1]
+
+        return {
+          type: productType,
+          gender: gender,
+          style: style,
+          width: width,
+          metal: metal
+        }
+      }
+    }
+
+    function getHandle() {
+      var parts
+
+      if (productType === ProductTypes.EngagementRing) {
+        parts = [selected.style, selected.setting, selected.size, selected.metal]
+      } else if (productType === ProductTypes.WeddingBand) {
+        parts = [selected.gender, selected.style, selected.width, selected.metal]
+      } 
+
+      return parts.reduce(function (acc, i) {
+        if (i) {
+          acc.push(i)
+        }
+        return acc
+      }, []).join('-')
+    }
+
+    function updateSelectedOptions() {
+      Object.keys(selected).forEach(function (key) {
+        var value = selected[key]
+        var label = getLabel(selected.type, key, value)
+
+        if (label) {
+          self.$container.find('.pane-main [data-target="' + key + '"] .selected-option').text(label)
+        }
+
+        self.$container.find('[data-pane="' + key + '"] ul.options a[data-value="' + value +'"]').closest('li').addClass('active').siblings().removeClass('active')
+      })
+    }
+
+    updateSelectedOptions()
+
+    // Update carousel index and length
+    carousel.on('afterChange', function(ev, slick) {
+      slickIdx = slick.currentSlide
+      slickLength = slick.slideCount
+
+      // Maintain carousel position across both carousels
+      carousel.slick('slickGoTo', slickIdx, true)
+    })
+
+    // Initial image fade in
+    carousel.on('init', function() {
+      $('.carousel img').addClass('fade-in')
+    })
+
+    // Carousel init
+    carousel.slick({
+      dots: true,
+      arrows: false
+    })
+
+    // Back button support - fetches product and renders based on location.pathname
+    window.addEventListener('popstate', function(ev) {
+      var match = document.location.pathname.match(/products\/([\w-]+)/)
+      if (match) {
+        var handle = match[1]
+        fetchProduct(handle)
+      }
+    })
+
+    function track(product) {
+      // Tracking
+      try {
+        analytics.track('Product Viewed', product);        
+      } catch (error) {
+        console.log(error)
+      }      
+    }
+
+    function fetchProduct(handle) {
+      Shopify.getProduct(handle, renderProduct)
+    }
+
+    function renderProduct(product) {
+      self.currentProduct = product
+      track(product)
+
+      // Update ring style - this effects the accent color on certain pages.
+      self.$container.attr('data-ring-style', product.tags)
+
+      // Update title
+      $('.description-container h1').text(product.title)
+
+      // Update price
+      //$('.details-container .price').text(slate.Currency.formatMoney(product.price, theme.moneyFormat))
+      $('a.add-to-cart .price').text(slate.Currency.formatMoney(product.price, theme.moneyFormat))
+      
+      // Update affirm price
+      $('.affirm-as-low-as').attr('data-amount', product.price);
+      affirm.ui.refresh(); 
+
+      var images = product.images.map(function(src) {
+        return slate.Image.getSizedImageUrl(src, '1024x1024')
+      })
+
+      // Wait for image to load
+      modal.find('.loading-overlay').addClass('is-loading')
+
+      var img = new Image()
+      img.src = images[slickIdx]
+      img.onload = function () {
+        carousel.slick('removeSlide', null, null, true)
+
+        // Update carousel images
+        images.forEach(function (src, idx) {
+          //var slide = $('<div/>').addClass('carousel-item').css('background-image', 'url("' + src + '")')
+          carousel.slick('addSlide', '<div class="carousel-item" style="background-image: url(' + src + ')"></div>')
+        })
+
+        // Maintain carousel position
+        carousel.slick('slickGoTo', slickIdx, true)
+        modal.find('.loading-overlay').removeClass('is-loading')
+      }
+
+      if (modal.find('.on-hand').hasClass('active')) {
+        updateOnHand()
+      }
+
+      // Update product footer thumbnail
+      var header = $('.header-secondary')
+      header.find('h4').text(product.title)
+      header.find('.thumbnail').css('background-image', 'url(' + slate.Image.getSizedImageUrl(product.images[0], '256x256') + ')');
+    }
+
+    var selectSizeButton = $('a.select-size')
+    var selectSizeMenu = $('.select-size-menu')
+
+    selectSizeButton.on('click', handleToggleSelectSizeMenu)
+
+    function handleToggleSelectSizeMenu(ev) {
+      ev.preventDefault()
+      ev.stopPropagation()
+
+      selectSizeButton.toggleClass('active')
+      selectSizeMenu.toggleClass('active')
+    }
+
+    $(document).on('click', function (ev) {
+      if (selectSizeMenu.hasClass('active') && !$(ev.target).closest('.select-size-menu').length) {
+        selectSizeMenu.removeClass('active')
+      }
+    })
+    selectSizeMenu.on('click', 'a.ring-size', function(ev) {
+      ringSize = $(this).data('size')
+      $(this).addClass('active').siblings().removeClass('active')
+      $('a.select-size').html('Size <span>' + ringSize + '</span>')
+      selectSizeMenu.removeClass('active')
+    })
+
+    function handleAddToCart(ev) {
+      ev.preventDefault()
+      ev.stopPropagation()
+
+      if (!ringSize) {
+        selectSizeMenu.addClass('active')
+        return
+      }
+
+      var variantId = self.currentProduct.variants[0].id
+
+      //Shopify.addItem(variantId, 1, function(res) {
+      CartJS.addItem(variantId, 1, { size: ringSize }, {
+        success: function (res, textStatus, jqXHR) {
+          //document.location.href = '/cart'
+          CartJS.cart.items.push(res)
+
+          window.cart.handleOpenDrawer()
+
+          analytics.track('Product Added To Cart', {
+            product: res.title,
+            quantity: res.quantity,
+            type: res.product_type,
+            sku: res.sku,
+            giftCardUsed: res.gift_card,
+            size: res.properties.size
+          })
+
+          // CartJS.getCart({
+          //   success: function () {
+          //     window.cart.handleOpenDrawer()
+          //   }
+          // })
+        },
+        error: function (res, textStatus, jqXHR) {
+          throw new Error(textStatus)
+        }
+      })
+    }
+
+    // Add to cart button
+    $('a.add-to-cart').on('click', handleAddToCart)
+
+    this.$container.on('click', 'ul.selected-options a', function(ev) {
+      const pane = currentPane = $(this).data('target')
+      $('.pane[data-pane="' + pane + '"]').addClass('active')
+      $('.pane').scrollTop(0)
+
+      openModal()
+    })
+
+    this.$container.on('click', 'ul.options a', function() {
+      var value = $(this).data('value')
+      var target = $(this).closest('li')
+      var container = target.closest('.pane')
+      var type = container.data('pane')
+      var options = target.closest('ul.options')
+      options.find('li').removeClass('active')
+      target.addClass('active')
+
+      selected[type] = value
+
+      updateSelectedOptions()
+
+      var handle = getHandle()
+
+      window.history.pushState({}, undefined, handle)
+      fetchProduct(handle)
+    })
+
+
+    var modalCarousel = self.$container.find('.product-configurator-modal .product-carousel')
+    var slideOverlay = modalCarousel.find('.slide-overlay')
+
+    var isConfiguratorOpen = false
+    function openModal() {
+      isConfiguratorOpen = true
+
+      // $('html, body').stop().animate({
+      //   scrollTop: 0
+      // }, 200, 'swing')
+
+      $(window).scrollTop(0)
+
+      setSlideOverlay()
+
+      modal.addClass('active')
+
+      $('body').addClass('modal-open configurator-fullscreen')
+    }
+
+    function setSlideOverlay() {
+      var slideCurrent = modalCarousel.find('.slick-current')
+      slideOverlay.css({
+        'background-image': slideCurrent.css('background-image')
+      })
+
+      slideOverlay.addClass('is-loading')
+
+      setTimeout(function () {
+        carousel.slick('setPosition')
+      }, 1200)
+
+      setTimeout(function () {
+        slideOverlay.removeClass('is-loading')
+      }, 1250)
+    }
+
+    function closeModal() {
+      isConfiguratorOpen = false
+
+      setSlideOverlay()
+
+      $('.pane.active').stop().animate({
+        scrollTop: 0
+      }, 200, 'swing')
+
+      $('.pane').removeClass('active')
+      $('body').removeClass('modal-open configurator-fullscreen')
+      modal.removeClass('active')
+      modal.find('.on-hand').removeClass('active')
+      modal.find('.loading-overlay').removeClass('is-loading')
+      modal.find('input#compare-on-hand').prop('checked', false)
+
+      $(window).scrollTop(0)
+    }
+
+    modal.on('click', 'a.done', closeModal)
+
+    $(document).on('keyup', function (ev) {
+      if (ev.keyCode === 27) {
+        if (isConfiguratorOpen) {
+          closeModal()
+        } else if (selectSizeMenu.hasClass('active')) {
+          selectSizeMenu.removeClass('active')
+        }
+      }
+    })
+
+    $('.header-secondary .title-column a').on('click', function() {
+      $('html, body').stop().animate({
+        scrollTop: 0
+      }, 900, 'swing')
+    })
+
+    function getAssetUrl(src, size) {
+      return slate.Image.getSizedImageUrl(window.theme.fileUrl.replace(/__FILE__.*$/, src), size)
+    }
+
+    function updateOnHand() {
+      var src = getAssetUrl(ONHAND_IMAGES[selected.style][currentPane][selected[currentPane]], '1024x1024')
+      var img = new Image()
+      img.src = src
+      modal.find('.loading-overlay').addClass('is-loading')
+      img.onload = function () {
+        modal.find('.on-hand').css('background-image', 'url("' + src + '")')
+        modal.find('.on-hand').addClass('active')
+        modal.find('.loading-overlay').removeClass('is-loading')
+      }
+    }
+
+    modal.on('change', 'input#compare-on-hand', function() {
+      if (this.checked) {
+        updateOnHand()
+      } else {
+        modal.find('.on-hand').removeClass('active')
+        modal.find('.loading-overlay').removeClass('is-loading')
+      }
+    })
+  }
+
+  Product.prototype = $.extend({}, Product.prototype, {
+
+    /**
+     * Updates the DOM state of the add to cart button
+     *
+     * @param {boolean} enabled - Decides whether cart is enabled or disabled
+     * @param {string} text - Updates the text notification content of the cart
+     */
+    updateAddToCartState: function(evt) {
+      var variant = evt.variant;
+
+      if (variant) {
+        $(selectors.priceWrapper, this.$container).removeClass('hide');
+      } else {
+        $(selectors.addToCart, this.$container).prop('disabled', true);
+        $(selectors.addToCartText, this.$container).html(theme.strings.unavailable);
+        $(selectors.priceWrapper, this.$container).addClass('hide');
+        return;
+      }
+
+      if (variant.available) {
+        $(selectors.addToCart, this.$container).prop('disabled', false);
+        $(selectors.addToCartText, this.$container).html(theme.strings.addToCart);
+      } else {
+        $(selectors.addToCart, this.$container).prop('disabled', true);
+        $(selectors.addToCartText, this.$container).html(theme.strings.soldOut);
+      }
+    },
+
+    /**
+     * Updates the DOM with specified prices
+     *
+     * @param {string} productPrice - The current price of the product
+     * @param {string} comparePrice - The original price of the product
+     */
+    updateProductPrices: function(evt) {
+      var variant = evt.variant;
+      var $comparePrice = $(selectors.comparePrice, this.$container);
+      var $compareEls = $comparePrice.add(selectors.comparePriceText, this.$container);
+
+      $(selectors.productPrice, this.$container)
+        .html(slate.Currency.formatMoney(variant.price, theme.moneyFormat));
+
+      if (variant.compare_at_price > variant.price) {
+        $comparePrice.html(slate.Currency.formatMoney(variant.compare_at_price, theme.moneyFormat));
+        $compareEls.removeClass('hide');
+      } else {
+        $comparePrice.html('');
+        $compareEls.addClass('hide');
+      }
+    },
+
+    /**
+     * Updates the DOM with the specified image URL
+     *
+     * @param {string} src - Image src URL
+     */
+    updateProductImage: function(evt) {
+      var variant = evt.variant;
+      var sizedImgUrl = slate.Image.getSizedImageUrl(variant.featured_image.src, this.settings.imageSize);
+
+      this.$featuredImage.attr('src', sizedImgUrl);
+    },
+
+    /**
+     * Event callback for Theme Editor `section:unload` event
+     */
+    onUnload: function() {
+      this.$container.off(this.namespace);
+    }
+  });
+
+  return Product;
+})();
+
+/**
+ * Product Template Script
+ * ------------------------------------------------------------------------------
+ * A file that contains scripts highly couple code to the Product template.
+ *
+   * @namespace product
+ */
+
+theme.RingSetting = (function () {
+
+  /**
+   * Product section constructor. Runs on page load as well as Theme Editor
+   * `section:load` events.
+   * @param {string} container - selector for the section container DOM element
+   */
+  function RingSetting(container) {
+    var self = this
+    this.$container = $(container);
+
+    console.log("Ring setting instantiated")
+
+    this.$container.find('.metal-variants').on('mouseenter', 'a', function() {
+      const target = $(this)
+      target.parents('ul').find('li').removeClass('active')
+      target.closest('li').addClass('active')
+      console.log('hey')
+    })
+  }
+
+  RingSetting.prototype = $.extend({}, RingSetting.prototype, {
+    /**
+     * Event callback for Theme Editor `section:unload` event
+     */
+    onUnload: function () {
+      this.$container.off(this.namespace);
+    }
+  });
+
+  return RingSetting;
+})();
+
+
+/*================ Templates ================*/
+/**
+ * Customer Addresses Script
+ * ------------------------------------------------------------------------------
+ * A file that contains scripts highly couple code to the Customer Addresses
+ * template.
+ *
+ * @namespace customerAddresses
+ */
+
+theme.customerAddresses = (function() {
+  var $newAddressForm = $('#AddressNewForm');
+
+  if (!$newAddressForm.length) {
+    return;
+  }
+
+  // Initialize observers on address selectors, defined in shopify_common.js
+  if (Shopify) {
+    new Shopify.CountryProvinceSelector('AddressCountryNew', 'AddressProvinceNew', {
+      hideElement: 'AddressProvinceContainerNew'
+    });
+  }
+
+  // Initialize each edit form's country/province selector
+  $('.address-country-option').each(function() {
+    var formId = $(this).data('form-id');
+    var countrySelector = 'AddressCountry_' + formId;
+    var provinceSelector = 'AddressProvince_' + formId;
+    var containerSelector = 'AddressProvinceContainer_' + formId;
+
+    new Shopify.CountryProvinceSelector(countrySelector, provinceSelector, {
+      hideElement: containerSelector
+    });
+  });
+
+  // Toggle new/edit address forms
+  $('.address-new-toggle').on('click', function() {
+    $newAddressForm.toggleClass('hide');
+  });
+
+  $('.address-edit-toggle').on('click', function() {
+    var formId = $(this).data('form-id');
+    $('#EditAddress_' + formId).toggleClass('hide');
+  });
+
+  $('.address-delete').on('click', function() {
+    var $el = $(this);
+    var formId = $el.data('form-id');
+    var confirmMessage = $el.data('confirm-message');
+    if (confirm(confirmMessage || 'Are you sure you wish to delete this address?')) {
+      Shopify.postLink('/account/addresses/' + formId, {parameters: {_method: 'delete'}});
+    }
+  });
+})();
+
+/**
+ * Password Template Script
+ * ------------------------------------------------------------------------------
+ * A file that contains scripts highly couple code to the Password template.
+ *
+ * @namespace password
+ */
+
+theme.customerLogin = (function() {
+  var config = {
+    recoverPasswordForm: '#RecoverPassword',
+    hideRecoverPasswordLink: '#HideRecoverPasswordLink'
+  };
+
+  if (!$(config.recoverPasswordForm).length) {
+    return;
+  }
+
+  checkUrlHash();
+  resetPasswordSuccess();
+
+  $(config.recoverPasswordForm).on('click', onShowHidePasswordForm);
+  $(config.hideRecoverPasswordLink).on('click', onShowHidePasswordForm);
+
+  function onShowHidePasswordForm(evt) {
+    evt.preventDefault();
+    toggleRecoverPasswordForm();
+  }
+
+  function checkUrlHash() {
+    var hash = window.location.hash;
+
+    // Allow deep linking to recover password form
+    if (hash === '#recover') {
+      toggleRecoverPasswordForm();
+    }
+  }
+
+  /**
+   *  Show/Hide recover password form
+   */
+  function toggleRecoverPasswordForm() {
+    $('#RecoverPasswordForm').toggleClass('hide');
+    $('#CustomerLoginForm').toggleClass('hide');
+  }
+
+  /**
+   *  Show reset password success message
+   */
+  function resetPasswordSuccess() {
+    var $formState = $('.reset-password-success');
+
+    // check if reset password form was successfully submited.
+    if (!$formState.length) {
+      return;
+    }
+
+    // show success message
+    $('#ResetSuccess').removeClass('hide');
+  }
+})();
+
+theme.configurator = (function () {
+  // console.log('it worked!')
+  
+  // var rings = [
+  //   '1ct-6-prong-solitaire-white-gold',
+  //   '1ct-6-prong-solitaire-yellow-gold',
+  //   '1ct-6-prong-solitaire-rose-gold'
+  // ]
+
+  // var handle = rings[0]
+
+  // $.ajax({
+  //   url: '/products/' + handle + '.js',
+  //   method: 'GET'
+  // })
+
+  // return {
+  //   active: true
+  // }
+})();
+
+$(document).ready(function () {
+  var body = $('body')
+  var container = $('#header')
+  var header = container.find('header')
+  var mainMenu = container.find('nav#main-menu')
+  var subMenu = container.find('nav#sub-menu')
+  var overlay = subMenu.find('.navigation-overlay')
+  var carousel = container.find('.carousel')
+  var reviewCarousel = body.find('.component-review-carousel .carousel-container')
+
+  setTimeout(function() {
+    container.show()
+  })
+
+  function handleOpenDrawer(ev, navItem) {
+    ev.preventDefault()
+
+    var target = navItem.data('target')
+    var pane = subMenu.find('[data-navigation-pane="' + target + '"]')
+
+    // Remove old active classes
+    mainMenu.find('li').removeClass('active')
+    subMenu.find('.navigation-pane').removeClass('active')
+
+    paneIdx = pane.data('slick-index')
+
+    carousel.slick('slickGoTo', paneIdx, !subMenu.hasClass('active'))
+
+    // Add new active classes
+    container.addClass('submenu-open')
+
+    subMenu.addClass('active')
+    pane.addClass('active')
+    navItem.addClass('active')
+    body.addClass('modal-open')
+  }
+
+  function handleCloseDrawer(ev) {
+    ev.preventDefault()
+
+    setTimeout(function () {
+      container.removeClass('submenu-open')
+    }, 400)
+    
+    mainMenu.find('li').removeClass('active')
+    subMenu.removeClass('active')
+    body.removeClass('modal-open')
+  }
+
+  mainMenu.find('.navigation-left').on('click', 'li[data-target] a', function(ev) {
+    var navItem = $(ev.target).closest('li')
+
+    if (subMenu.hasClass('active') && navItem.hasClass('active')) {
+      handleCloseDrawer(ev)
+    } else {
+      handleOpenDrawer(ev, navItem)
+    }
+  })
+
+
+
+  overlay.on('click', handleCloseDrawer)
+  $(document).on('keyup', function(ev) {
+    if (ev.keyCode === 27 && subMenu.hasClass('active')) {
+      overlay.click()
+    }
+  })
+
+  header.find('a.cart-link').on('click', function(ev) {
+    ev.preventDefault()
+    window.cart.handleOpenDrawer()
+  })
+
+  header.find('a.signin-link').on('click', function (ev) {
+    ev.preventDefault()
+    window.signin.handleOpenDrawer()
+  })
+
+  carousel.slick({
+    arrows: false,
+    infinite: false
+  })
+
+  $('.nav-images').on('mousemove', function(ev) {
+    const width = this.offsetWidth
+    const percent = ev.offsetX / width
+    let position
+    if (percent < 0.33) {
+      position = 'left'
+    } else if (percent > 0.66) {
+      position = 'right'
+    } else {
+      position = 'center'
+    }
+
+    $(this).attr('data-hover', position)
+  })
+
+  $('a.mobile-navigation-open').on('click', function() {
+    container.addClass('mobile-navigation-open')
+    body.addClass('modal-open')
+  })
+
+  $('a.mobile-navigation-close').on('click', function() {
+    container.removeClass('mobile-navigation-open')
+    $('.mobile-navigation .navigation-pane').removeClass('active')
+    $('.mobile-navigation .navigation-pane-root').addClass('active')
+    body.removeClass('modal-open')
+  })
+
+  $('.mobile-navigation').on('click', '[data-target]', function (ev) {
+    var target = $(this).data('target')
+    $('.mobile-navigation .navigation-pane').removeClass('active')
+    $('.mobile-navigation .navigation-pane-' + target).addClass('active')
+    container.addClass('show-back')
+  })
+
+  $('a.mobile-navigation-back').on('click', function () {
+    $('.mobile-navigation .navigation-pane').removeClass('active')
+    $('.mobile-navigation .navigation-pane-root').addClass('active')
+    container.removeClass('show-back')
+  })
+
+  $('a.link-primary')
+  .on('mouseenter', function() {
+    $(this).removeClass('animate-out').addClass('animate-in')
+  })
+  .on('mouseleave', function () {
+    $(this).removeClass('animate-in').addClass('animate-out')
+  })
+
+  $('.with-link-primary')
+  .on('mouseenter', function () {
+    $(this).find('.link-primary').removeClass('animate-out').addClass('animate-in')
+  })
+  .on('mouseleave', function () {
+    $(this).find('.link-primary').removeClass('animate-in').addClass('animate-out')
+  })
+
+  $('.with-hover-animation')
+  .on('mouseenter', function () {
+    $(this).removeClass('animate-out').addClass('animate-in')
+  })
+  .on('mouseleave', function () {
+    $(this).removeClass('animate-in').addClass('animate-out')
+  })
+
+  // Scroll to element
+  $('a[href^="#"]').on('click', function (ev) {
+    ev.preventDefault()
+    var hash = this.hash
+    var target = $(hash)
+
+    $('html, body').stop().animate({
+      scrollTop: target.offset().top - 160
+    }, 900, 'swing', function () {
+      //window.location.hash = hash
+    })
+  })
+
+  $('.scroll-arrow').on('click', function (ev) {
+    ev.preventDefault()
+
+    $('html, body').stop().animate({
+      scrollTop: $(window).height()
+    }, 900, 'swing')
+  })
+
+  $('a.scroll-to-top').on('click', function(ev) {
+    ev.preventDefault()
+
+    $('html, body').stop().animate({
+      scrollTop: 0
+    }, 900, 'swing')
+  })
+
+  $('.image-container').each(function() {
+    var $el = $(this)
+    var src = $el.css('background-image').split('"')[1]
+
+    if (src) {
+      var img = new Image()
+      img.onload = function() {
+        $el.addClass('image-ready')
+      }
+      img.src = src
+    } else {
+      $el.addClass('image-ready')
+    }
+  })
+
+  reviewCarousel.slick({
+    dots: true,
+    infinite: true,
+    autoplay: true,
+    autoplaySpeed: 7000,
+    arrows: true,
+    nextArrow: '<a class="next-arrow"><svg class="icon-carat" width="14px" height="9px" viewBox="0 0 14 9" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" focusable="false" role="”presentation”"><g id="Symbols" stroke="none" stroke-width="1" fill = "none" fill-rule="evenodd" stroke - linecap="square"><g id="button/size" transform="translate(-317.000000, -31.000000)" stroke="#122947" stroke-width="2"><g id="Icon/carat-up" transform="translate(312.000000, 24.000000)"><g id="Icon/carat" transform="translate(12.000000, 12.000000) rotate(-180.000000) translate(-12.000000, -12.000000) "><polyline id="Path-2" transform="translate(12.000000, 10.000000) rotate(-405.000000) translate(-12.000000, -10.000000) " points="8 6 8 14 16 14"></polyline></g></g></g></g></svg></a>',
+    prevArrow: '<a class="prev-arrow"><svg class="icon-carat" width="14px" height="9px" viewBox="0 0 14 9" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" focusable="false" role="”presentation”"><g id="Symbols" stroke="none" stroke-width="1" fill = "none" fill-rule="evenodd" stroke - linecap="square"><g id="button/size" transform="translate(-317.000000, -31.000000)" stroke="#122947" stroke-width="2"><g id="Icon/carat-up" transform="translate(312.000000, 24.000000)"><g id="Icon/carat" transform="translate(12.000000, 12.000000) rotate(-180.000000) translate(-12.000000, -12.000000) "><polyline id="Path-2" transform="translate(12.000000, 10.000000) rotate(-405.000000) translate(-12.000000, -10.000000) " points="8 6 8 14 16 14"></polyline></g></g></g></g></svg></a>'
+  })
+})
+
+$(document).ready(function () {
+  var configs = {
+    default: {
+      enter: function(el) {
+        el.addClass('waypoint-active')
+      },
+      exit: function(el) {
+        el.removeClass('waypoint-active')
+      }
+    },
+
+    once: {
+      exit: null
+    },
+
+    scrollLink: {
+      enter: function(el) {
+        el.addClass('waypoint-active')
+      },
+      exit: null,
+      iterate: function (el, scrollTop, windowHeight, waypointOffset, waypointHeight) {
+        if (scrollTop + 160 >= waypointOffset && waypointOffset + waypointHeight > scrollTop + 160) {
+          setActiveScrollLink(el)
+        } else { 
+          clearActiveScrollLink(el)
+        }
+      }
+    },
+
+    header: {
+      iterate: function(el, scrollTop) {
+        if (scrollTop > 0) {
+          el.parent().addClass('collapsed')
+        } else {
+          el.parent().removeClass('collapsed')
+        }
+      }
+    },
+
+    footer: {
+      enter: function() {
+        $('a.cta-chat-with-us').addClass('hidden')
+      },
+      exit: function() {
+        $('a.cta-chat-with-us').removeClass('hidden')
+      }
+
+      // iterate: function (el, scrollTop, windowHeight, waypointOffset, waypointHeight) {
+      //   if (scrollTop + windowHeight >= waypointOffset + waypointHeight) {
+      //     el.addClass('waypoint-bottom-active')
+      //   } else {
+      //     el.removeClass('waypoint-bottom-active')
+      //   }
+      // }
+    },
+
+    sticky: {
+      iterate: function(el, scrollTop, windowHeight, waypointOffset, waypointHeight) {
+        if (scrollTop + 80 >= waypointOffset) {
+          el.addClass('waypoint-sticky')
+        } else {
+          el.removeClass('waypoint-sticky')
+        }
+      }
+    }
+  }
+
+  var operations = []
+  function enqueueWriteOperation(op) {
+    operations.push(op)
+  }
+
+  function executeWriteOperations() {
+    operations.forEach(function (op) {
+      op()
+    })
+    operations = []
+  }
+
+  function setActiveScrollLink(el) {
+    var id = el.attr('id')
+    if (id) {
+      $('a[href="#' + id + '"]').addClass('active').siblings().removeClass('active')
+    }
+  }
+
+  function clearActiveScrollLink(el) {
+    var id = el.attr('id')
+    if (id) {
+      $('a[href="#' + id + '"]').removeClass('active')
+    }
+  }
+
+  const waypoints = $('[data-waypoint]')
+
+  function isVisible(scrollTop, windowHeight, waypointOffset, waypointHeight) {
+    return scrollTop + windowHeight >= waypointOffset && scrollTop < waypointOffset + waypointHeight
+  }
+
+  function handleScrollWaypoints() {
+    var scrollTop = $(window).scrollTop()
+    var windowHeight = $(window).height()
+
+    if (scrollTop === 0) {
+      $('body').addClass('top')
+    } else {
+      $('body').removeClass('top')
+    }
+
+    waypoints.each(function () {
+      var $el = $(this)
+      var target = $el.data('waypoint')
+      var config = Object.assign({}, configs['default'], configs[target])
+      var waypointOffset = $el.offset().top
+      var waypointHeight = $el.outerHeight(false)
+      var isActive = $el.data('waypoint-visible')
+
+      typeof config.iterate === 'function' && enqueueWriteOperation(function() { config.iterate($el, scrollTop, windowHeight, Math.floor(waypointOffset), Math.floor(waypointHeight)) })
+
+      if (isVisible(scrollTop, windowHeight, waypointOffset, waypointHeight)) {
+        if (!isActive) {
+          typeof config.enter === 'function' && enqueueWriteOperation(function() { config.enter($el) })
+        }
+
+        enqueueWriteOperation(function() { $el.data('waypoint-visible', true) })
+      } else {
+        if (isActive) {
+          typeof config.exit === 'function' && enqueueWriteOperation(function() { config.exit($el) })
+        }
+
+        enqueueWriteOperation(function() { $el.data('waypoint-visible', false) })
+      }
+    })
+
+    executeWriteOperations()
+  }
+
+  $(window).scroll(handleScrollWaypoints)
+  $(window).resize(handleScrollWaypoints)
+
+  handleScrollWaypoints()
+
+  setTimeout(function() {
+    // Trigger for initial load
+    handleScrollWaypoints()
+  })
+})
+$(document).ready(function () {
+  $('.tabbed-component').each(Tabs)
+})
+
+function Tabs() {
+  var container = $(this)
+  var tabs = container.find('ul.tabs li')
+  var panes = container.find('.tab-pane')
+  var tabIdx = 0
+
+  var animateOutTimeout
+  var nextTimeout
+
+  function selectTab(idx) {
+    clearTimeout(animateOutTimeout)
+    clearTimeout(nextTimeout)
+    
+    tabIdx = idx % tabs.length
+    var currTab = tabs.eq(tabIdx)
+    var currPane = panes.eq(tabIdx)
+
+    container.attr('data-tab', currTab.data('target'))
+    tabs.removeClass('active')
+    panes.removeClass('active')
+
+    currPane.addClass('active')
+    currTab.removeClass('animate-out').addClass('active animate-in')
+
+    animateOutTimeout = setTimeout(function () {
+      currTab.removeClass('animate-in').addClass('animate-out')
+      //nextTimeout = setTimeout(function() {
+        selectTab(tabIdx + 1)
+      //}, 5000)
+    }, 8000)
+  }
+
+  tabs.on('click', function() {
+    var idx = tabs.index(this)
+    selectTab(idx)
+  })
+
+  selectTab(0)
+}
+
+
+$(document).ready(function () {
+  var container = $('.module-faq')
+  var questions = container.find('.question-container')
+
+  questions.on('click', 'a.question', function() {
+    var el = $(this)
+    questions.removeClass('active')
+    el.closest('.question-container').addClass('active')
+  })
+
+  questions.on('click', 'a.close', function () {
+    var el = $(this)
+    el.closest('.question-container').removeClass('active')
+  })
+})
+
+
+
+$(document).ready(function() {
+  var sections = new slate.Sections();
+  sections.register('cart', theme.Cart);
+  sections.register('signin', theme.SignIn);
+  sections.register('product', theme.Product);
+  sections.register('ring-setting', theme.RingSetting);
+  
+  // Common a11y fixes
+  slate.a11y.pageLinkFocus($(window.location.hash));
+
+  $('.in-page-link').on('click', function(evt) {
+    slate.a11y.pageLinkFocus($(evt.currentTarget.hash));
+  });
+
+  // Target tables to make them scrollable
+  var tableSelectors = '.rte table';
+
+  slate.rte.wrapTable({
+    $tables: $(tableSelectors),
+    tableWrapperClass: 'rte__table-wrapper',
+  });
+
+  // Target iframes to make them responsive
+  var iframeSelectors =
+    '.rte iframe[src*="youtube.com/embed"],' +
+    '.rte iframe[src*="player.vimeo"]';
+
+  slate.rte.wrapIframe({
+    $iframes: $(iframeSelectors),
+    iframeWrapperClass: 'rte__video-wrapper'
+  });
+
+  // Apply a specific class to the html element for browser support of cookies.
+  if (slate.cart.cookiesEnabled()) {
+    document.documentElement.className = document.documentElement.className.replace('supports-no-cookies', 'supports-cookies');
+  }
+});
